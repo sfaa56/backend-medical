@@ -109,7 +109,7 @@ const loginUser = async (req, res) => {
       httpOnly: true, // prevents access from JavaScript
       secure:true, // HTTPS only in production
       // protects against CSRF
-            sameSite: "none", // protects against CSRF
+      sameSite: "none", // protects against CSRF
       maxAge: 5 * 60 * 60 * 1000, // 5 hours
 
     });
