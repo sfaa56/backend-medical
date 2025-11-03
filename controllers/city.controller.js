@@ -260,3 +260,37 @@ exports.deleteCity = async (req, res) => {
     res.status(500).json({ error: "something went wrong" });
   }
 };
+
+
+
+// home search 
+
+// controllers/heroController.js
+const ServiceCategory = require("../models/ServiceCategory");
+
+
+exports.getHeroData = async (req, res) => {
+  try {
+    // Fetch first 5 service categories
+    const categories = await ServiceCategory.find()
+      .limit(5)
+      .select("_id name") // only needed fields
+      .populate({
+        path: "specialty",
+        select: "name",
+      });
+
+    // Fetch first 5 cities
+    const cities = await City.find()
+      .limit(5)
+      .select("_id name");
+
+    res.status(200).json({ categories, cities });
+  } catch (err) {
+    console.error("Hero Data Fetch Error:", err);
+    res.status(500).json({
+      message: "Failed to fetch hero data",
+      error: err.message,
+    });
+  }
+}

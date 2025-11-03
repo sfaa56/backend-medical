@@ -1,13 +1,64 @@
 // models/ProviderService.js
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-const providerServiceSchema = new mongoose.Schema({
-  providerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Provider', required: true },
-  title: { type: String, required: true },
-  description: { type: String },
-  price: { type: Number, required: true },
-  serviceCategory: { type: mongoose.Schema.Types.ObjectId, ref: 'ServiceCategory', required: true },
-  specialtyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Specialty' }
-}, { timestamps: true });
+const providerServiceSchema = new mongoose.Schema(
+  {
+    providerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
 
-module.exports = mongoose.model('ProviderService', providerServiceSchema);
+    title: { type: String, required: true },
+
+    place: { type: String, required: true },
+
+    price: { type: Number, required: true },
+
+    priceType: {
+      type: String,
+      enum: ["Hourly", "Session"],
+      default: "Session",
+    },
+
+    cuncurncey: {
+      type: String,
+      enum: ["USD", "EGP", "EUR"],
+    },
+
+    serviceCategory: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ServiceCategory",
+      required: true,
+    },
+
+    subServiceCategory: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "SubServiceCategory",
+    },
+
+    specialty: { type: mongoose.Schema.Types.ObjectId, ref: "Specialty" },
+
+    image: {
+      publicId: { type: String },
+      url: { type: String },
+    },
+
+    bookings: [{
+      bookingId: { type: mongoose.Schema.Types.ObjectId, ref: "ServiceBookingRequest" },
+      clientId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+      status: {
+        type: String,
+        enum: ["pending", "accepted", "rejected", "completed", "cancelled"],
+        default: "pending",
+      },
+      createdAt: { type: Date, default: Date.now },
+    }],
+  },
+  { timestamps: true }
+);
+
+module.exports = mongoose.model("ProviderService", providerServiceSchema);

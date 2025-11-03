@@ -1,6 +1,6 @@
 const express = require("express");
 
-const {loginUser ,registerUser,logoutUser,ChangePassword } = require("../controllers/auth.controller");
+const {googleLogin,loginUser ,registerUser,logoutUser,ChangePassword,refreshAccessToken } = require("../controllers/auth.controller");
 const validateToken = require('../middleware/validateToken');
 
 
@@ -16,6 +16,8 @@ router.put("/password",validateToken,ChangePassword)
 // router.post("/forget",forgetPassword)
 // router.post("/verify",verifyToken)
 // router.post("/resetPassword",resetPassword)
-// router.post("/refresh",refreshAccessToken);
+router.post("/refresh",refreshAccessToken);
+
+router.post("/google",googleLogin)
 
 module.exports = router;

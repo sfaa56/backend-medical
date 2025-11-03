@@ -2,6 +2,7 @@
 const mongoose = require('mongoose');
 
 const specialtySchema = new mongoose.Schema({
+  categories: [{ type: mongoose.Schema.Types.ObjectId, ref: 'ServiceCategory' }],
   name: { type: String, required: true, unique: true },
   description: String,
 });

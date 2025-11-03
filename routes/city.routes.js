@@ -21,4 +21,8 @@ router.post("/:cityId/districts/:districtId/postalCodes",validateToken,postalCod
 router.put("/:cityId/districts/:districtId/postalCodes/:postalId",validateToken,postalCode.updatePostalCode)
 router.delete("/:cityId/districts/:districtId/postalCodes/:postalId",validateToken,postalCode.deletePostalCode)
 
+
+// getHeroData
+router.get('/hero-data', cityController.getHeroData);
+
 module.exports = router;

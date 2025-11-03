@@ -1,13 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const serviceRequestController = require('../controllers/serviceRequest.controller');
-const { verifyToken } = require('../middleware/validateToken');
+const validateToken = require('../middleware/validateToken');
 
-router.post('/', verifyToken,serviceRequestController.createRequest);
+
+router.post('/', validateToken,serviceRequestController.createRequest);
 router.get('/', serviceRequestController.getAllRequests);
 router.get('/:id', serviceRequestController.getRequestById);
-router.put('/:id', verifyToken,serviceRequestController.updateRequest);
-router.delete('/:id', verifyToken,serviceRequestController.deleteRequest);
-router.get('/client/:id', verifyToken,serviceRequestController.getRequestsByClientId);
+router.put('/:id', validateToken,serviceRequestController.updateRequest);
+router.delete('/:id', validateToken,serviceRequestController.deleteRequest);
+router.get('/client/:id', validateToken,serviceRequestController.getRequestsByClientId);
+
+router.get('/Kpi/client',validateToken,serviceRequestController.getClientKPI)
 
 module.exports = router;
