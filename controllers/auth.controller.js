@@ -223,13 +223,12 @@ const loginUser = async (req, res) => {
     const refreshToken = generateRefreshToken(user);
 
     // ✅ Set cookies before sending JSON
-    res.cookie("session", token, {
-      httpOnly: false, // admin gets httpOnly true
-      secure: true, // true in production
-      sameSite: "none" ,
-      maxAge: 5 * 60 * 60 * 1000, // 5 hours
- 
-    });
+res.cookie("session", token, {
+  httpOnly: true,
+  secure: true,
+  sameSite: "none",
+  domain: "carelink-frontend-nine.vercel.app",
+});
 
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
