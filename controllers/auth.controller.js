@@ -226,7 +226,7 @@ const loginUser = async (req, res) => {
     res.cookie("session", token, {
       httpOnly: true, // admin gets httpOnly true
       secure: true, // true in production
-      sameSite: "lax" ,
+      sameSite: "none" ,
       maxAge: 5 * 60 * 60 * 1000, // 5 hours
       domain: "carelink-frontend-nine.vercel.app",
     });
@@ -234,7 +234,7 @@ const loginUser = async (req, res) => {
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
       secure: true,
-      sameSite: "lax",
+      sameSite: "none",
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 day
       domain: "carelink-frontend-nine.vercel.app",
     });
