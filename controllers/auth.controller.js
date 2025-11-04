@@ -226,14 +226,14 @@ const loginUser = async (req, res) => {
     res.cookie("session", token, {
       httpOnly: true, // admin gets httpOnly true
       secure: true, // true in production
-      sameSite: "none" ,
+      sameSite: "lax" ,
       maxAge: 5 * 60 * 60 * 1000, // 5 hours
     });
 
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
       secure: true,
-      sameSite: "none",
+      sameSite: "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
