@@ -235,7 +235,7 @@ const loginUser = async (req, res) => {
       httpOnly: true,
       secure: true,
       sameSite: "none",
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 day
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 da
       domain: "carelink-frontend-nine.vercel.app",
     });
 
