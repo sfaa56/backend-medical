@@ -225,15 +225,15 @@ const loginUser = async (req, res) => {
     // ✅ Set cookies before sending JSON
     res.cookie("session", token, {
       httpOnly: user.role === "admin", // admin gets httpOnly true
-      secure: false, // true in production
-      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production", // true in production
+      sameSite: process.env.NODE_ENV === "production"? "lax":"none" ,
       maxAge: 5 * 60 * 60 * 1000, // 5 hours
     });
 
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      sameSite: process.env.NODE_ENV === "production"? "lax":"none",
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 

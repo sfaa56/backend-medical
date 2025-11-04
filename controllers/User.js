@@ -607,32 +607,42 @@ const deleteUser = async (req, res) => {
   if (req.user.role !== "admin") {
     return res.status(403).json({ message: "Access denied" });
   }
+
   try {
     const userId = req.params.id;
-
     const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    // Delete image from Cloudinary if it exists
+    // Delete user's profile image
     if (user.image && user.image.publicId) {
       await cloudinary.uploader.destroy(user.image.publicId);
     }
 
+    // Delete provider services and their images
+    const services = await ProviderService.find({ providerId: userId });
+    for (const service of services) {
+      if (service.image && service.image.publicId) {
+        await cloudinary.uploader.destroy(service.image.publicId);
+      }
+    }
+    await ProviderService.deleteMany({ providerId: userId });
+
+    // Delete appointments where user is provider or client
+    await Appointment.deleteMany({ $or: [{ providerId: userId }, { clientId: userId }] });
+
     // Delete related documents
     await Promise.all([
-      Offer.deleteMany({ userId }),
-      Booking.deleteMany({ userId }),
-      Review.deleteMany({ userId }),
+      Offer.deleteMany({ providerId: userId }),
+      Review.deleteMany({ $or: [{ providerId: userId }, { clientId: userId }] }),
+      ServiceBookingRequest.deleteMany({ $or: [{ providerId: userId }, { clientId: userId }] }),
     ]);
 
     // Delete the user
     await User.findByIdAndDelete(userId);
 
-    res.status(200).json({ message: "User deleted" });
+    res.status(200).json({ message: "User and all related data deleted successfully" });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 };
