@@ -228,6 +228,7 @@ const loginUser = async (req, res) => {
       secure: true, // true in production
       sameSite: "lax" ,
       maxAge: 5 * 60 * 60 * 1000, // 5 hours
+      domain: "carelink-frontend-nine.vercel.app",
     });
 
     res.cookie("refreshToken", refreshToken, {
@@ -235,6 +236,7 @@ const loginUser = async (req, res) => {
       secure: true,
       sameSite: "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 day
+      domain: "carelink-frontend-nine.vercel.app",
     });
 
     // ✅ Send single JSON response and stop execution
