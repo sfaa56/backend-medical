@@ -224,7 +224,7 @@ const loginUser = async (req, res) => {
 
     // ✅ Set cookies before sending JSON
     res.cookie("session", token, {
-      httpOnly: true, // admin gets httpOnly true
+      httpOnly: false, // admin gets httpOnly true
       secure: true, // true in production
       sameSite: "none" ,
       maxAge: 5 * 60 * 60 * 1000, // 5 hours
