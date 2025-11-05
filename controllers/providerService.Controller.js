@@ -145,31 +145,62 @@ const parseIds = (val) => {
     .filter(Boolean);
 };
 
+
 exports.getAllServices = async (req, res) => {
   try {
     const matchTop = {};
 
-    // ✅ price filter
+
+    // ---------------------- Sorting ----------------------
+let sortField = req.query.sortBy || "createdAt";
+let sortOrder = req.query.order === "asc" ? 1 : -1;
+
+// If user selects predefined options
+if (req.query.sort === "price-asc") {
+  sortField = "price";
+  sortOrder = 1;
+} else if (req.query.sort === "price-desc") {
+  sortField = "price";
+  sortOrder = -1;
+} else if (req.query.sort === "rating-desc") {
+  sortField = "provider.averageRating";
+  sortOrder = -1;
+}
+
+
+
+    // ---------------------- Price Filter ----------------------
     if (req.query.minPrice || req.query.maxPrice) {
       matchTop.price = {};
       if (req.query.minPrice) matchTop.price.$gte = +req.query.minPrice;
       if (req.query.maxPrice) matchTop.price.$lte = +req.query.maxPrice;
     }
 
-    // ✅ direct filters
+    // ---------------------- Direct Filters ----------------------
     if (req.query.priceType) matchTop.priceType = req.query.priceType;
     if (req.query.cuncurncey) matchTop.cuncurncey = req.query.cuncurncey;
     if (req.query.providerId && mongoose.Types.ObjectId.isValid(req.query.providerId)) {
       matchTop.providerId = new mongoose.Types.ObjectId(req.query.providerId);
     }
 
-    // ✅ text filters
-    if (req.query.title)
-      matchTop.title = { $regex: req.query.title, $options: "i" };
-    if (req.query.place)
-      matchTop.place = { $regex: req.query.place, $options: "i" };
+    // ---------------------- Text Filter ----------------------
+    if (req.query.title) matchTop.title = { $regex: req.query.title, $options: "i" };
 
-    // ✅ category filters
+    // ---------------------- Service Method Filter ----------------------
+    if (req.query.serviceMethod) {
+      const methods = String(req.query.serviceMethod)
+        .split(",")
+        .map((m) => m.trim())
+        .filter(Boolean);
+
+      if (methods.length === 1) {
+        matchTop.place = { $regex: methods[0], $options: "i" };
+      } else {
+        matchTop.$or = methods.map((m) => ({ place: { $regex: m, $options: "i" } }));
+      }
+    }
+
+    // ---------------------- Category Filters ----------------------
     const specialties = parseIds(req.query.specialty || req.query.specialties);
     const subServiceCategories = parseIds(
       req.query.subcategory || req.query.subServiceCategory || req.query.subspecialty
@@ -178,11 +209,13 @@ exports.getAllServices = async (req, res) => {
       req.query.category || req.query.serviceCategory
     );
 
-    // ✅ pipeline
+    // ---------------------- Pipeline ----------------------
     const pipeline = [];
     if (Object.keys(matchTop).length) pipeline.push({ $match: matchTop });
 
-    // Lookup subServiceCategory -> serviceCategory
+
+
+    // Lookup for subServiceCategory -> serviceCategory
     pipeline.push(
       {
         $lookup: {
@@ -202,7 +235,6 @@ exports.getAllServices = async (req, res) => {
         },
       },
       { $unwind: { path: "$serviceCategory", preserveNullAndEmptyArrays: true } },
-      // Lookup specialty
       {
         $lookup: {
           from: "specialties",
@@ -211,15 +243,17 @@ exports.getAllServices = async (req, res) => {
           as: "specialty",
         },
       },
-      { $unwind: { path: "$specialty", preserveNullAndEmptyArrays: true } },
-      // Lookup provider and join subspecialty, postal info
+      { $unwind: { path: "$specialty", preserveNullAndEmptyArrays: true } }
+    );
+
+    // Lookup provider and location info
+    pipeline.push(
       {
         $lookup: {
           from: "users",
           let: { providerId: "$providerId" },
           pipeline: [
             { $match: { $expr: { $eq: ["$_id", "$$providerId"] } } },
-            // Subspecialty lookup
             {
               $lookup: {
                 from: "subspecialties",
@@ -228,11 +262,7 @@ exports.getAllServices = async (req, res) => {
                 as: "subspecialty",
               },
             },
-            {
-              $addFields: {
-                firstSubspecialty: { $arrayElemAt: ["$subspecialty", 0] },
-              },
-            },
+            { $addFields: { firstSubspecialty: { $arrayElemAt: ["$subspecialty", 0] } } },
             {
               $lookup: {
                 from: "postalcodes",
@@ -263,6 +293,7 @@ exports.getAllServices = async (req, res) => {
             {
               $project: {
                 _id: 1,
+                averageRating:1,
                 firstName: 1,
                 lastName: 1,
                 email: 1,
@@ -278,62 +309,116 @@ exports.getAllServices = async (req, res) => {
           as: "provider",
         },
       },
-      { $unwind: { path: "$provider", preserveNullAndEmptyArrays: true } },
-      // Clean up structure
-      {
-        $addFields: {
-          serviceCategory: { _id: "$serviceCategory._id", name: "$serviceCategory.name" },
-          subServiceCategory: { _id: "$subServiceCategory._id", name: "$subServiceCategory.name" },
-          specialty: { _id: "$specialty._id", name: "$specialty.name" },
-          "provider.subspecialty": {
-            _id: "$provider.subspecialty._id",
-            name: "$provider.subspecialty.name",
-          },
-        },
-      },
-      // Final project
-      {
-        $project: {
-          _id: 1,
-          title: 1,
-          description: 1,
-          price: 1,
-          priceType: 1,
-          cuncurncey: 1,
-          place: 1,
-          image: 1,
-          createdAt: 1,
-          serviceCategory: 1,
-          subServiceCategory: 1,
-          specialty: 1,
-          provider: 1,
-        },
-      }
+      { $unwind: { path: "$provider", preserveNullAndEmptyArrays: true } }
     );
 
-    // Post-filtering by categories
+    // ---------------------- Location Filter (Provider) ----------------------
+    if (req.query.location) {
+      const locations = String(req.query.location)
+        .split(",")
+        .map((l) => l.trim())
+        .filter(Boolean);
+
+      if (locations.length === 1) {
+        pipeline.push({
+          $match: {
+            $or: [
+              { "provider.city.name": { $regex: locations[0], $options: "i" } },
+              { "provider.district.name": { $regex: locations[0], $options: "i" } },
+              { "provider.postalCode.code": { $regex: locations[0], $options: "i" } }
+            ]
+          }
+        });
+      } else {
+        pipeline.push({
+          $match: {
+            $or: locations.flatMap((loc) => [
+              { "provider.city.name": { $regex: loc, $options: "i" } },
+              { "provider.district.name": { $regex: loc, $options: "i" } },
+              { "provider.postalCode.code": { $regex: loc, $options: "i" } }
+            ])
+          }
+        });
+      }
+    }
+
+    // ---------------------- Post Filter Categories ----------------------
     const matchAfter = {};
-    if (serviceCategories.length) matchAfter["serviceCategory._id"] = 
-    { $in: serviceCategories.map(id => new mongoose.Types.ObjectId(id)) };
-    if (subServiceCategories.length) matchAfter["subServiceCategory._id"] = 
-    { $in: subServiceCategories.map(id => new mongoose.Types.ObjectId(id)) };
-    if (specialties.length) matchAfter["specialty._id"] = { $in: specialties.map(id => new mongoose.Types.ObjectId(id)) };
+    if (serviceCategories.length) matchAfter["serviceCategory._id"] =
+      { $in: serviceCategories.map(id => new mongoose.Types.ObjectId(id)) };
+    if (subServiceCategories.length) matchAfter["subServiceCategory._id"] =
+      { $in: subServiceCategories.map(id => new mongoose.Types.ObjectId(id)) };
+    if (specialties.length) matchAfter["specialty._id"] =
+      { $in: specialties.map(id => new mongoose.Types.ObjectId(id)) };
     if (Object.keys(matchAfter).length) pipeline.push({ $match: matchAfter });
 
-    // Pagination
-    const page = Math.max(1, parseInt(req.query.page || "1", 10));
-    const limit = Math.max(1, parseInt(req.query.limit || "20", 10));
-    const skip = (page - 1) * limit;
-    pipeline.push({ $sort: { createdAt: -1 } }, { $skip: skip }, { $limit: limit });
-
-    // Execute aggregation
-    const services = await ProviderService.aggregate(pipeline);
-
-    res.status(200).json({
-      success: true,
-      meta: { page, limit, count: services.length },
-      data: services,
+    // ---------------------- Cleanup & Project ----------------------
+    pipeline.push({
+      $addFields: {
+        serviceCategory: { _id: "$serviceCategory._id", name: "$serviceCategory.name" },
+        subServiceCategory: { _id: "$subServiceCategory._id", name: "$subServiceCategory.name" },
+        specialty: { _id: "$specialty._id", name: "$specialty.name" },
+        "provider.subspecialty": {
+          _id: "$provider.subspecialty._id",
+          name: "$provider.subspecialty.name",
+        },
+      },
     });
+
+    pipeline.push({
+      $project: {
+        _id: 1,
+        title: 1,
+        description: 1,
+        price: 1,
+        priceType: 1,
+        cuncurncey: 1,
+        place: 1,
+        image: 1,
+        createdAt: 1,
+        serviceCategory: 1,
+        subServiceCategory: 1,
+        specialty: 1,
+        provider: 1,
+        bookings:1
+      },
+    });
+
+   // ---------------------- Pagination ----------------------
+const page = Math.max(1, parseInt(req.query.page || "1", 10));
+const limit = Math.max(1, parseInt(req.query.limit || "10", 10));
+const skip = (page - 1) * limit;
+
+// ---------------------- Count total BEFORE pagination ----------------------
+const countPipeline = pipeline.filter(
+  (stage) => !("$skip" in stage || "$limit" in stage || "$sort" in stage)
+);
+countPipeline.push({ $count: "total" });
+
+const countResult = await ProviderService.aggregate(countPipeline);
+const totalServices = countResult[0]?.total || 0;
+
+// ---------------------- Apply sorting + pagination ----------------------
+pipeline.push(
+  { $sort: { [sortField]: sortOrder } },
+  { $skip: skip },
+  { $limit: limit }
+);
+
+// ---------------------- Execute ----------------------
+const services = await ProviderService.aggregate(pipeline);
+
+res.status(200).json({
+  success: true,
+  meta: {
+    page,
+    limit,
+    total: totalServices,
+    totalPages: Math.ceil(totalServices / limit),
+    count: services.length, // number of items in this page
+  },
+  data: services,
+});
   } catch (err) {
     console.error("Error in getAllServices:", err);
     res.status(500).json({ success: false, message: err.message });
@@ -443,6 +528,7 @@ exports.getServiceById = async (req, res) => {
         },
       },
       { $unwind: { path: "$provider", preserveNullAndEmptyArrays: true } },
+      
       {
         $addFields: {
           serviceCategory: { _id: "$serviceCategory._id", name: "$serviceCategory.name" },
@@ -473,6 +559,8 @@ exports.getServiceById = async (req, res) => {
         },
       },
     ];
+
+
 
     const service = await ProviderService.aggregate(pipeline);
 

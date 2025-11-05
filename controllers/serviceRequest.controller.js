@@ -151,7 +151,20 @@ const getAllRequests = async (req, res) => {
     if (subCategories?.length)
       match["subCategory._id"] = { $in: subCategories };
 
-    if (req.query.serviceMethod) match.place = req.query.serviceMethod;
+    if (req.query.serviceMethod) {
+      const methods = String(req.query.serviceMethod)
+        .split(",") // split by comma
+        .map((m) => m.trim()) // remove whitespace
+        .filter(Boolean);
+
+      if (methods.length === 1) {
+        matchTop.place = { $regex: methods[0], $options: "i" };
+      } else {
+        matchTop.$or = methods.map((m) => ({
+          place: { $regex: m, $options: "i" },
+        }));
+      }
+    }
 
     // 💰 فلترة السعر
     if (req.query.minPrice || req.query.maxPrice) {
@@ -293,9 +306,58 @@ const getAllRequests = async (req, res) => {
       });
     }
 
+// ---------------------- Sorting ----------------------
+    let sortField = req.query.sortBy || "createdAt";
+    let sortOrder = req.query.order === "asc" ? 1 : -1;
+
+    // Optional custom sort aliases
+    if (req.query.sort === "price-asc") {
+      sortField = "price";
+      sortOrder = 1;
+    } else if (req.query.sort === "price-desc") {
+      sortField = "price";
+      sortOrder = -1;
+    } else if (req.query.sort === "date-desc") {
+      sortField = "createdAt";
+      sortOrder = -1;
+    }
+
+    // ---------------------- Pagination ----------------------
+    const page = Math.max(1, parseInt(req.query.page || "1", 10));
+    const limit = Math.max(1, parseInt(req.query.limit || "10", 10));
+    const skip = (page - 1) * limit;
+
+    // ---------------------- Count Total (before pagination) ----------------------
+    const countPipeline = pipeline.filter(
+      (stage) => !("$skip" in stage || "$limit" in stage || "$sort" in stage)
+    );
+    countPipeline.push({ $count: "total" });
+
+    const countResult = await ServiceRequest.aggregate(countPipeline);
+    const totalRequests = countResult[0]?.total || 0;
+
+    // ---------------------- Apply Sorting & Pagination ----------------------
+    pipeline.push(
+      { $sort: { [sortField]: sortOrder } },
+      { $skip: skip },
+      { $limit: limit }
+    );
+
+    // ---------------------- Execute Main Query ----------------------
     const requests = await ServiceRequest.aggregate(pipeline);
 
-    res.status(200).json({ success: true, data: requests });
+    // ---------------------- Response ----------------------
+    res.status(200).json({
+      success: true,
+      meta: {
+        page,
+        limit,
+        count: requests.length, // number in this page
+        total: totalRequests,   // all matching requests
+        totalPages: Math.ceil(totalRequests / limit),
+      },
+      data: requests,
+    });
   } catch (err) {
     console.error("❌ Error in getAllRequests:", err);
     res.status(500).json({ success: false, message: err.message });
@@ -323,6 +385,10 @@ const getRequestById = async (req, res) => {
       .populate({
         path: "offers",
         populate: { path: "providerId" },
+      })
+      .populate({
+        path: "acceptedOffer",
+        populate: { path: "providerId", select: "image firstName  lastName" },
       })
       .lean();
 
@@ -436,12 +502,10 @@ const deleteRequest = async (req, res) => {
     });
 
     if (offerNotCompleted) {
-      return res
-        .status(403)
-        .json({
-          success: false,
-          message: "you have to complete your offer first",
-        });
+      return res.status(403).json({
+        success: false,
+        message: "you have to complete your offer first",
+      });
     }
 
     // 🧹 Mark offers as deleted
