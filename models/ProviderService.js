@@ -44,21 +44,40 @@ const providerServiceSchema = new mongoose.Schema(
       url: { type: String },
     },
 
-    bookings: [{
-      bookingId: { type: mongoose.Schema.Types.ObjectId, ref: "ServiceBookingRequest" },
-      clientId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
+    bookings: [
+      {
+        bookingId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "ServiceBookingRequest",
+        },
+        clientId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+        status: {
+          type: String,
+          enum: ["pending", "accepted", "rejected", "completed", "cancelled"],
+          default: "pending",
+        },
+        createdAt: { type: Date, default: Date.now },
       },
-      status: {
+    ],
+
+    location: {
+      type: {
         type: String,
-        enum: ["pending", "accepted", "rejected", "completed", "cancelled"],
-        default: "pending",
+        enum: ["Point"],
+        default: "Point",
       },
-      createdAt: { type: Date, default: Date.now },
-    }],
+      coordinates: {
+        type: [Number], // [lon, lat]
+        default: [0, 0],
+      },
+    },
   },
   { timestamps: true }
 );
+
+providerServiceSchema.index({ location: "2dsphere" });
 
 module.exports = mongoose.model("ProviderService", providerServiceSchema);

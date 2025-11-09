@@ -5,6 +5,7 @@ const Review = require("../models/Review");
 const Offer = require("../models/Offer");
 const PostalCode = require("../models/PostalCode");
 const mongoose = require("mongoose");
+const { geocodeAddress } = require("../utils/geocode");
 
 // ✅ Create Schema
 const createRequestSchema = Joi.object({
@@ -40,6 +41,12 @@ const createRequestSchema = Joi.object({
   price: Joi.string().required(),
   priceType: Joi.string().valid("Hourly", "Session", "Visit").required(),
   currency: Joi.string().valid("USD", "EGP", "EUR"),
+
+      location: Joi.object({
+      city: Joi.string(),
+      district: Joi.string(),
+      postalCode: Joi.string(),
+    }),
 });
 
 // ✅ Update Schema (fields optional)
@@ -86,8 +93,20 @@ const createRequest = async (req, res) => {
     return res.status(403).json({ success: false, message: "Access denied" });
 
   try {
+    const { city, district, postalCode, ...body } = req.body;
+
+
+    // ✅ Geocode address
+    const coords = await geocodeAddress(city, district, postalCode);   
+    
+    delete req.body.location;
+
     const request = new ServiceRequest({
       ...req.body,
+      postalCode:postalCode,
+      location: coords
+        ? { type: "Point", coordinates: [coords.lon, coords.lat] }
+        : undefined,
       clientId: req.user.id,
     });
 
@@ -135,6 +154,10 @@ const getAllRequests = async (req, res) => {
   console.log("req.query", req.query);
   try {
     const match = {};
+
+    if (req.query.status) {
+      match.status = req.query.status;
+    }
 
     // 🧠 فلترة التخصصات
     const specialties = parseIds(req.query.specialty);
@@ -306,7 +329,7 @@ const getAllRequests = async (req, res) => {
       });
     }
 
-// ---------------------- Sorting ----------------------
+    // ---------------------- Sorting ----------------------
     let sortField = req.query.sortBy || "createdAt";
     let sortOrder = req.query.order === "asc" ? 1 : -1;
 
@@ -353,7 +376,7 @@ const getAllRequests = async (req, res) => {
         page,
         limit,
         count: requests.length, // number in this page
-        total: totalRequests,   // all matching requests
+        total: totalRequests, // all matching requests
         totalPages: Math.ceil(totalRequests / limit),
       },
       data: requests,
@@ -375,6 +398,10 @@ const getRequestById = async (req, res) => {
         },
       })
       .populate({
+        path: "clientId",
+        select: " email firstName LastName createdAt ",
+      })
+      .populate({
         path: "subSpecialty",
         populate: { path: "specialty" },
       })
@@ -384,7 +411,7 @@ const getRequestById = async (req, res) => {
       })
       .populate({
         path: "offers",
-        populate: { path: "providerId" },
+        populate: { path: "providerId", select: "-password -__v" },
       })
       .populate({
         path: "acceptedOffer",
@@ -404,11 +431,11 @@ const getRequestById = async (req, res) => {
 };
 
 const updateRequest = async (req, res) => {
-  const { error } = updateRequestSchema.validate(req.body);
-  if (error)
-    return res
-      .status(400)
-      .json({ success: false, message: error.details[0].message });
+  // const { error } = updateRequestSchema.validate(req.body);
+  // if (error)
+  //   return res
+  //     .status(400)
+  //     .json({ success: false, message: error.details[0].message });
 
   if (req.user.role !== "client" && req.user.role !== "admin")
     return res.status(403).json({ success: false, message: "Access denied" });
@@ -468,7 +495,10 @@ const updateRequest = async (req, res) => {
       req.params.id,
       { $set: req.body },
       { new: true, runValidators: true }
-    );
+    ).populate({
+      path: "offers",
+      populate: { path: "providerId", select: "-password -__v" },
+    });
 
     res.status(200).json({ success: true, data: updated });
   } catch (err) {
@@ -496,10 +526,12 @@ const deleteRequest = async (req, res) => {
 
     // check if there offer acepted but not completed yet
 
-    const offerNotCompleted = Offer.findOne({
+    const offerNotCompleted = await Offer.findOne({
       serviceRequestId: request._id,
       status: "accepted",
     });
+
+    console.log("offerNotCompleted", offerNotCompleted);
 
     if (offerNotCompleted) {
       return res.status(403).json({

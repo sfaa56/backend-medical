@@ -49,6 +49,7 @@ const serviceRequestSchema = new mongoose.Schema(
 
     attachments: [
       {
+        name: { type: String },
         publicId: { type: String },
         url: { type: String },
       },
@@ -70,8 +71,22 @@ const serviceRequestSchema = new mongoose.Schema(
     acceptedOffer: { type: mongoose.Schema.Types.ObjectId, ref: "Offer" },
     acceptedProvider: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     place: { type: String, required: true },
+
+    location: {
+      type: {
+        type: String,
+        enum: ["Point"],
+        default: "Point",
+      },
+      coordinates: {
+        type: [Number], // [lon, lat]
+        default: [0, 0],
+      },
+    },
   },
   { timestamps: true }
 );
+
+serviceRequestSchema.index({ location: "2dsphere" });
 
 module.exports = mongoose.model("ServiceRequest", serviceRequestSchema);

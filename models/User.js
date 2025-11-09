@@ -99,8 +99,22 @@ const userSchema = new mongoose.Schema(
       default: 0,
     },
     isAvailable: { type: Boolean, default: true },
+
+    location: {
+      type: {
+        type: String,
+        enum: ["Point"],
+        default: "Point",
+      },
+      coordinates: {
+        type: [Number], // [lon, lat]
+        default: [0, 0],
+      },
+    },
   },
   { timestamps: true }
 );
+
+userSchema.index({ location: "2dsphere" });
 
 module.exports = mongoose.model("User", userSchema);

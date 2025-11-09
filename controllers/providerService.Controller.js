@@ -97,15 +97,18 @@ exports.deleteProviderService = async (req, res) => {
       return res.status(403).json({ error: "Access denied" });
     }
 
-
-    // check if there is booking still in progress 
+    // check if there is booking still in progress
     const booking = BookingRequest.findOne({
-      serviceId:service._id,
-      status:"accepted"
-    })
+      serviceId: service._id,
+      status: "accepted",
+    });
 
-    if(booking){
-      res.status(400).json({ error: "you have to complete your appointment first for this service" });
+    if (booking) {
+      res
+        .status(400)
+        .json({
+          error: "you have to complete your appointment first for this service",
+        });
     }
 
     // 3️⃣ Delete the service document
@@ -145,29 +148,25 @@ const parseIds = (val) => {
     .filter(Boolean);
 };
 
-
 exports.getAllServices = async (req, res) => {
   try {
     const matchTop = {};
 
-
     // ---------------------- Sorting ----------------------
-let sortField = req.query.sortBy || "createdAt";
-let sortOrder = req.query.order === "asc" ? 1 : -1;
+    let sortField = req.query.sortBy || "createdAt";
+    let sortOrder = req.query.order === "asc" ? 1 : -1;
 
-// If user selects predefined options
-if (req.query.sort === "price-asc") {
-  sortField = "price";
-  sortOrder = 1;
-} else if (req.query.sort === "price-desc") {
-  sortField = "price";
-  sortOrder = -1;
-} else if (req.query.sort === "rating-desc") {
-  sortField = "provider.averageRating";
-  sortOrder = -1;
-}
-
-
+    // If user selects predefined options
+    if (req.query.sort === "price-asc") {
+      sortField = "price";
+      sortOrder = 1;
+    } else if (req.query.sort === "price-desc") {
+      sortField = "price";
+      sortOrder = -1;
+    } else if (req.query.sort === "rating-desc") {
+      sortField = "provider.averageRating";
+      sortOrder = -1;
+    }
 
     // ---------------------- Price Filter ----------------------
     if (req.query.minPrice || req.query.maxPrice) {
@@ -179,12 +178,16 @@ if (req.query.sort === "price-asc") {
     // ---------------------- Direct Filters ----------------------
     if (req.query.priceType) matchTop.priceType = req.query.priceType;
     if (req.query.cuncurncey) matchTop.cuncurncey = req.query.cuncurncey;
-    if (req.query.providerId && mongoose.Types.ObjectId.isValid(req.query.providerId)) {
+    if (
+      req.query.providerId &&
+      mongoose.Types.ObjectId.isValid(req.query.providerId)
+    ) {
       matchTop.providerId = new mongoose.Types.ObjectId(req.query.providerId);
     }
 
     // ---------------------- Text Filter ----------------------
-    if (req.query.title) matchTop.title = { $regex: req.query.title, $options: "i" };
+    if (req.query.title)
+      matchTop.title = { $regex: req.query.title, $options: "i" };
 
     // ---------------------- Service Method Filter ----------------------
     if (req.query.serviceMethod) {
@@ -196,14 +199,18 @@ if (req.query.sort === "price-asc") {
       if (methods.length === 1) {
         matchTop.place = { $regex: methods[0], $options: "i" };
       } else {
-        matchTop.$or = methods.map((m) => ({ place: { $regex: m, $options: "i" } }));
+        matchTop.$or = methods.map((m) => ({
+          place: { $regex: m, $options: "i" },
+        }));
       }
     }
 
     // ---------------------- Category Filters ----------------------
     const specialties = parseIds(req.query.specialty || req.query.specialties);
     const subServiceCategories = parseIds(
-      req.query.subcategory || req.query.subServiceCategory || req.query.subspecialty
+      req.query.subcategory ||
+        req.query.subServiceCategory ||
+        req.query.subspecialty
     );
     const serviceCategories = parseIds(
       req.query.category || req.query.serviceCategory
@@ -212,8 +219,6 @@ if (req.query.sort === "price-asc") {
     // ---------------------- Pipeline ----------------------
     const pipeline = [];
     if (Object.keys(matchTop).length) pipeline.push({ $match: matchTop });
-
-
 
     // Lookup for subServiceCategory -> serviceCategory
     pipeline.push(
@@ -225,7 +230,12 @@ if (req.query.sort === "price-asc") {
           as: "subServiceCategory",
         },
       },
-      { $unwind: { path: "$subServiceCategory", preserveNullAndEmptyArrays: true } },
+      {
+        $unwind: {
+          path: "$subServiceCategory",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
       {
         $lookup: {
           from: "servicecategories",
@@ -234,7 +244,9 @@ if (req.query.sort === "price-asc") {
           as: "serviceCategory",
         },
       },
-      { $unwind: { path: "$serviceCategory", preserveNullAndEmptyArrays: true } },
+      {
+        $unwind: { path: "$serviceCategory", preserveNullAndEmptyArrays: true },
+      },
       {
         $lookup: {
           from: "specialties",
@@ -262,7 +274,11 @@ if (req.query.sort === "price-asc") {
                 as: "subspecialty",
               },
             },
-            { $addFields: { firstSubspecialty: { $arrayElemAt: ["$subspecialty", 0] } } },
+            {
+              $addFields: {
+                firstSubspecialty: { $arrayElemAt: ["$subspecialty", 0] },
+              },
+            },
             {
               $lookup: {
                 from: "postalcodes",
@@ -271,7 +287,12 @@ if (req.query.sort === "price-asc") {
                 as: "postalCode",
               },
             },
-            { $unwind: { path: "$postalCode", preserveNullAndEmptyArrays: true } },
+            {
+              $unwind: {
+                path: "$postalCode",
+                preserveNullAndEmptyArrays: true,
+              },
+            },
             {
               $lookup: {
                 from: "districts",
@@ -280,7 +301,9 @@ if (req.query.sort === "price-asc") {
                 as: "district",
               },
             },
-            { $unwind: { path: "$district", preserveNullAndEmptyArrays: true } },
+            {
+              $unwind: { path: "$district", preserveNullAndEmptyArrays: true },
+            },
             {
               $lookup: {
                 from: "cities",
@@ -293,12 +316,13 @@ if (req.query.sort === "price-asc") {
             {
               $project: {
                 _id: 1,
-                averageRating:1,
+                averageRating: 1,
                 firstName: 1,
                 lastName: 1,
                 email: 1,
                 image: 1,
                 specialty: 1,
+                location:1,
                 subspecialty: "$firstSubspecialty",
                 postalCode: { _id: 1, code: 1 },
                 district: { _id: 1, name: 1 },
@@ -324,10 +348,20 @@ if (req.query.sort === "price-asc") {
           $match: {
             $or: [
               { "provider.city.name": { $regex: locations[0], $options: "i" } },
-              { "provider.district.name": { $regex: locations[0], $options: "i" } },
-              { "provider.postalCode.code": { $regex: locations[0], $options: "i" } }
-            ]
-          }
+              {
+                "provider.district.name": {
+                  $regex: locations[0],
+                  $options: "i",
+                },
+              },
+              {
+                "provider.postalCode.code": {
+                  $regex: locations[0],
+                  $options: "i",
+                },
+              },
+            ],
+          },
         });
       } else {
         pipeline.push({
@@ -335,28 +369,40 @@ if (req.query.sort === "price-asc") {
             $or: locations.flatMap((loc) => [
               { "provider.city.name": { $regex: loc, $options: "i" } },
               { "provider.district.name": { $regex: loc, $options: "i" } },
-              { "provider.postalCode.code": { $regex: loc, $options: "i" } }
-            ])
-          }
+              { "provider.postalCode.code": { $regex: loc, $options: "i" } },
+            ]),
+          },
         });
       }
     }
 
     // ---------------------- Post Filter Categories ----------------------
     const matchAfter = {};
-    if (serviceCategories.length) matchAfter["serviceCategory._id"] =
-      { $in: serviceCategories.map(id => new mongoose.Types.ObjectId(id)) };
-    if (subServiceCategories.length) matchAfter["subServiceCategory._id"] =
-      { $in: subServiceCategories.map(id => new mongoose.Types.ObjectId(id)) };
-    if (specialties.length) matchAfter["specialty._id"] =
-      { $in: specialties.map(id => new mongoose.Types.ObjectId(id)) };
+    if (serviceCategories.length)
+      matchAfter["serviceCategory._id"] = {
+        $in: serviceCategories.map((id) => new mongoose.Types.ObjectId(id)),
+      };
+    if (subServiceCategories.length)
+      matchAfter["subServiceCategory._id"] = {
+        $in: subServiceCategories.map((id) => new mongoose.Types.ObjectId(id)),
+      };
+    if (specialties.length)
+      matchAfter["specialty._id"] = {
+        $in: specialties.map((id) => new mongoose.Types.ObjectId(id)),
+      };
     if (Object.keys(matchAfter).length) pipeline.push({ $match: matchAfter });
 
     // ---------------------- Cleanup & Project ----------------------
     pipeline.push({
       $addFields: {
-        serviceCategory: { _id: "$serviceCategory._id", name: "$serviceCategory.name" },
-        subServiceCategory: { _id: "$subServiceCategory._id", name: "$subServiceCategory.name" },
+        serviceCategory: {
+          _id: "$serviceCategory._id",
+          name: "$serviceCategory.name",
+        },
+        subServiceCategory: {
+          _id: "$subServiceCategory._id",
+          name: "$subServiceCategory.name",
+        },
         specialty: { _id: "$specialty._id", name: "$specialty.name" },
         "provider.subspecialty": {
           _id: "$provider.subspecialty._id",
@@ -380,45 +426,45 @@ if (req.query.sort === "price-asc") {
         subServiceCategory: 1,
         specialty: 1,
         provider: 1,
-        bookings:1
+        bookings: 1,
       },
     });
 
-   // ---------------------- Pagination ----------------------
-const page = Math.max(1, parseInt(req.query.page || "1", 10));
-const limit = Math.max(1, parseInt(req.query.limit || "10", 10));
-const skip = (page - 1) * limit;
+    // ---------------------- Pagination ----------------------
+    const page = Math.max(1, parseInt(req.query.page || "1", 10));
+    const limit = Math.max(1, parseInt(req.query.limit || "10", 10));
+    const skip = (page - 1) * limit;
 
-// ---------------------- Count total BEFORE pagination ----------------------
-const countPipeline = pipeline.filter(
-  (stage) => !("$skip" in stage || "$limit" in stage || "$sort" in stage)
-);
-countPipeline.push({ $count: "total" });
+    // ---------------------- Count total BEFORE pagination ----------------------
+    const countPipeline = pipeline.filter(
+      (stage) => !("$skip" in stage || "$limit" in stage || "$sort" in stage)
+    );
+    countPipeline.push({ $count: "total" });
 
-const countResult = await ProviderService.aggregate(countPipeline);
-const totalServices = countResult[0]?.total || 0;
+    const countResult = await ProviderService.aggregate(countPipeline);
+    const totalServices = countResult[0]?.total || 0;
 
-// ---------------------- Apply sorting + pagination ----------------------
-pipeline.push(
-  { $sort: { [sortField]: sortOrder } },
-  { $skip: skip },
-  { $limit: limit }
-);
+    // ---------------------- Apply sorting + pagination ----------------------
+    pipeline.push(
+      { $sort: { [sortField]: sortOrder } },
+      { $skip: skip },
+      { $limit: limit }
+    );
 
-// ---------------------- Execute ----------------------
-const services = await ProviderService.aggregate(pipeline);
+    // ---------------------- Execute ----------------------
+    const services = await ProviderService.aggregate(pipeline);
 
-res.status(200).json({
-  success: true,
-  meta: {
-    page,
-    limit,
-    total: totalServices,
-    totalPages: Math.ceil(totalServices / limit),
-    count: services.length, // number of items in this page
-  },
-  data: services,
-});
+    res.status(200).json({
+      success: true,
+      meta: {
+        page,
+        limit,
+        total: totalServices,
+        totalPages: Math.ceil(totalServices / limit),
+        count: services.length, // number of items in this page
+      },
+      data: services,
+    });
   } catch (err) {
     console.error("Error in getAllServices:", err);
     res.status(500).json({ success: false, message: err.message });
@@ -431,7 +477,9 @@ exports.getServiceById = async (req, res) => {
     const { serviceId } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(serviceId)) {
-      return res.status(400).json({ success: false, message: "Invalid service ID" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid service ID" });
     }
 
     const pipeline = [
@@ -444,7 +492,12 @@ exports.getServiceById = async (req, res) => {
           as: "subServiceCategory",
         },
       },
-      { $unwind: { path: "$subServiceCategory", preserveNullAndEmptyArrays: true } },
+      {
+        $unwind: {
+          path: "$subServiceCategory",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
       {
         $lookup: {
           from: "servicecategories",
@@ -453,7 +506,9 @@ exports.getServiceById = async (req, res) => {
           as: "serviceCategory",
         },
       },
-      { $unwind: { path: "$serviceCategory", preserveNullAndEmptyArrays: true } },
+      {
+        $unwind: { path: "$serviceCategory", preserveNullAndEmptyArrays: true },
+      },
       {
         $lookup: {
           from: "specialties",
@@ -490,7 +545,12 @@ exports.getServiceById = async (req, res) => {
                 as: "postalCode",
               },
             },
-            { $unwind: { path: "$postalCode", preserveNullAndEmptyArrays: true } },
+            {
+              $unwind: {
+                path: "$postalCode",
+                preserveNullAndEmptyArrays: true,
+              },
+            },
             {
               $lookup: {
                 from: "districts",
@@ -499,7 +559,9 @@ exports.getServiceById = async (req, res) => {
                 as: "district",
               },
             },
-            { $unwind: { path: "$district", preserveNullAndEmptyArrays: true } },
+            {
+              $unwind: { path: "$district", preserveNullAndEmptyArrays: true },
+            },
             {
               $lookup: {
                 from: "cities",
@@ -528,11 +590,17 @@ exports.getServiceById = async (req, res) => {
         },
       },
       { $unwind: { path: "$provider", preserveNullAndEmptyArrays: true } },
-      
+
       {
         $addFields: {
-          serviceCategory: { _id: "$serviceCategory._id", name: "$serviceCategory.name" },
-          subServiceCategory: { _id: "$subServiceCategory._id", name: "$subServiceCategory.name" },
+          serviceCategory: {
+            _id: "$serviceCategory._id",
+            name: "$serviceCategory.name",
+          },
+          subServiceCategory: {
+            _id: "$subServiceCategory._id",
+            name: "$subServiceCategory.name",
+          },
           specialty: { _id: "$specialty._id", name: "$specialty.name" },
           "provider.subspecialty": {
             _id: "$provider.subspecialty._id",
@@ -543,7 +611,7 @@ exports.getServiceById = async (req, res) => {
       {
         $project: {
           _id: 1,
-          bookings:1,
+          bookings: 1,
           title: 1,
           description: 1,
           price: 1,
@@ -560,12 +628,12 @@ exports.getServiceById = async (req, res) => {
       },
     ];
 
-
-
     const service = await ProviderService.aggregate(pipeline);
 
     if (!service.length) {
-      return res.status(404).json({ success: false, message: "Service not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Service not found" });
     }
 
     res.status(200).json({ success: true, data: service[0] });
@@ -574,4 +642,3 @@ exports.getServiceById = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-

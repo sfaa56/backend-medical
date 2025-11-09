@@ -5,6 +5,8 @@ const crypto = require("crypto");
 const Joi = require("joi");
 const Clinc = require("../models/Clinc");
 const { OAuth2Client } = require("google-auth-library");
+const { sendNotification } = require("../utils/notify");
+const { geocodeAddress } = require("../utils/geocode");
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // Step 1: Personal Info
@@ -28,10 +30,18 @@ const personalSchema = Joi.object({
   }).required(),
 
   postalCode: Joi.string().min(1).required(),
+  
+    location: Joi.object({
+    city: Joi.string(),
+    district: Joi.string(),
+    postalCode: Joi.string(),
+  }),
+
 });
 
 // Step 2–4: Extra info for providers
 const providerSchema = personalSchema.keys({
+
   isVerified: Joi.boolean().default(false),
 
   specialty: Joi.string().required(),
@@ -99,7 +109,7 @@ const passwordValidationSchema = Joi.object({
 const generateAccessToken = (user) => {
   return jwt.sign(
     {
-      image:user?.image?.url,
+      image: user?.image?.url,
       name: user.firstName,
       id: user._id,
       email: user.email,
@@ -143,6 +153,7 @@ const registerUser = async (req, res) => {
 
     // ✅ Check if email exists
     const existing = await User.findOne({ email: req.body.email });
+    console.log("existing", existing);
     if (existing) {
       return res.status(400).json({ error: "Email already exists" });
     }
@@ -151,13 +162,27 @@ const registerUser = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     req.body.password = hashedPassword;
 
+    const { city, district, postalCode } = req.body.location;
+
+    const coords = await geocodeAddress(city, district, postalCode);
+
+   delete req.body.location;
+
     // ✅ Create user
-    const user = new User(req.body);
+    const user = new User({
+      ...req.body,
+      postalCode:postalCode,
+      location: coords
+        ? { type: "Point", coordinates: [coords.lon, coords.lat] }
+        : undefined,
+    });
+
     await user.save();
 
     // ✅ If role is provider, create clinic entry
     if (user.role === "provider" && clinicName && ClinicLocation) {
       const newClinic = new Clinc({
+        user: user._id,
         name: clinicName,
         postalCode: ClinicLocation.postalCode, // must exist in PostalCodeSchema if you reference it
         timeFrom,
@@ -174,6 +199,18 @@ const registerUser = async (req, res) => {
     }
 
     if (user.role === "provider") {
+      const admin = await User.findOne({ role: "admin" }).select("_id");
+      // Notify client about new offer
+      await sendNotification({
+        recipientId: admin._id,
+        senderId: user._id,
+        type: "provider_registeration",
+        message: `New provider requested registration`,
+        relatedId: user._id,
+
+        io: req.io,
+      });
+
       return res.status(201).json({
         message: "Registration successful. Pending admin approval.",
       });
@@ -244,18 +281,18 @@ const loginUser = async (req, res) => {
         id: user._id,
         email: user.email,
         role: user.role,
-        gender:user.gender,
-        dateOfBirth:user.dateOfBirth,
+        gender: user.gender,
+        dateOfBirth: user.dateOfBirth,
         firstName: user.firstName,
         lastName: user.lastName,
         phone: user.phone,
         image: user.image,
         subspecialty: user.subspecialty,
-        city:user.postalCode.district.city.name,
-        district:user.postalCode.district.name,
-        postalCode:user.postalCode.code,
-        availability:user.availability,
-        isAvailable:user.isAvailable
+        city: user?.postalCode?.district?.city.name,
+        district: user?.postalCode?.district?.name,
+        postalCode: user?.postalCode?.code,
+        availability: user.availability,
+        isAvailable: user.isAvailable,
       },
     });
   } catch (err) {
@@ -356,7 +393,9 @@ const googleLogin = async (req, res) => {
 
     if (!user) {
       // not allow registration via google
-      return res.status(400).json({ error: "No account associated with this Google email" });
+      return res
+        .status(400)
+        .json({ error: "No account associated with this Google email" });
     }
 
     const accessToken = generateAccessToken(user);
@@ -393,13 +432,11 @@ const googleLogin = async (req, res) => {
   }
 };
 
-
-
 module.exports = {
   registerUser,
   loginUser,
   logoutUser,
   ChangePassword,
   refreshAccessToken,
-  googleLogin
+  googleLogin,
 };

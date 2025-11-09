@@ -50,6 +50,7 @@ app.use("/api/specialties",require("./routes/specialty.routes"));
 app.use("/api/admin",require("./routes/admin.routes"));
 app.use("/api/notification", require("./routes/notification.routes"));
 app.use("/api/reviews", require("./routes/review.routes"));
+app.use("/api/complaints", require("./routes/complain.route"));
 
 
 app.use("/", (req, res) => {

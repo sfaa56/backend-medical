@@ -25,7 +25,11 @@ const notificationSchema = new mongoose.Schema(
         "offer_withdrawn",
         
         "new_review",
-        "review_request"
+        "review_request",
+
+        "provider_registeration",
+
+        "complaint"
 
 
       ],

@@ -4,6 +4,7 @@ const joi = require("joi");
 const ServiceRequest = require("../models/ServiceRequest");
 const Appointment = require("../models/Appointment");
 const { populate } = require("../models/User");
+const { sendNotification } = require("../utils/notify");
 
 const offerSchema = joi.object({
   serviceRequestId: joi.string().required(),

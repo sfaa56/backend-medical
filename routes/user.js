@@ -9,7 +9,8 @@ const {
     toggleAvailability,
     getAllProviders,
     getProviderById,
-    getProviderKPI
+    getProviderKPI,
+    updatePicFromAdmin
     } = require("../controllers/User");
 const validateToken = require("../middleware/validateToken");
     
@@ -23,7 +24,8 @@ router.get('/provider/:id',getProviderById);
 router.get('/',validateToken,getAllUsers);
 router.get('/:id',validateToken,getUserById);
 router.put('/:id',validateToken,updateUser);
-router.put("/picture/upload",validateToken,userPicture)
+router.put("/picture/upload",validateToken,userPicture);
+router.put("/pictureFromAdmin/upload",validateToken,updatePicFromAdmin);
 router.delete('/:id',validateToken,deleteUser);
 
 router.patch("/me/toggle-availability", validateToken, toggleAvailability);
