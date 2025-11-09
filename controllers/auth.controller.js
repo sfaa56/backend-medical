@@ -29,7 +29,7 @@ const personalSchema = Joi.object({
     year: Joi.number().min(1900).max(new Date().getFullYear()).required(),
   }).required(),
 
-  postalCode: Joi.string().min(1).required(),
+  postalCode: Joi.string().min(1).optional(),
   
     location: Joi.object({
     city: Joi.string(),
@@ -167,6 +167,8 @@ const registerUser = async (req, res) => {
     const coords = await geocodeAddress(city, district, postalCode);
 
    delete req.body.location;
+
+   
 
     // ✅ Create user
     const user = new User({
