@@ -24,8 +24,8 @@ const createRequestSchema = Joi.object({
       Joi.object({
         publicId: Joi.string().required(),
         url: Joi.string().required(),
-        name:Joi.string().optional(),
-        _id:Joi.string().optional()
+        name: Joi.string().optional(),
+        _id: Joi.string().optional(),
       }).optional()
     )
     .optional(),
@@ -45,11 +45,11 @@ const createRequestSchema = Joi.object({
   currency: Joi.string().valid("USD", "EGP", "EUR"),
 
   postalCode: Joi.string().optional,
-      location: Joi.object({
-      city: Joi.string(),
-      district: Joi.string(),
-      postalCode: Joi.string(),
-    }),
+  location: Joi.object({
+    city: Joi.string(),
+    district: Joi.string(),
+    postalCode: Joi.string(),
+  }),
 });
 
 // ✅ Update Schema (fields optional)
@@ -68,8 +68,8 @@ const updateRequestSchema = Joi.object({
       Joi.object({
         publicId: Joi.string().required(),
         url: Joi.string().required(),
-                name:Joi.string().optional(),
-        _id:Joi.string().optional()
+        name: Joi.string().optional(),
+        _id: Joi.string().optional(),
       }).optional()
     )
     .optional(),
@@ -98,17 +98,26 @@ const createRequest = async (req, res) => {
     return res.status(403).json({ success: false, message: "Access denied" });
 
   try {
-    const { city, district, postalCode, ...body } = req.body;
+    const { city, district, postalCode } = req.body.location;
 
+    const postalCodeObj = await PostalCode.findOne(req.body.postalcode);
+
+    if (!postalCodeObj) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Something went wrong" });
+    }
 
     // ✅ Geocode address
-    const coords = await geocodeAddress(city, district, postalCode);   
-    
+    const coords = await geocodeAddress(city, district, postalCodeObj.code);
+
+    console.log("cards",coords)
+
     delete req.body.location;
 
     const request = new ServiceRequest({
       ...req.body,
-      postalCode:postalCode,
+      postalCode: postalCode,
       location: coords
         ? { type: "Point", coordinates: [coords.lon, coords.lat] }
         : undefined,
@@ -479,6 +488,37 @@ const updateRequest = async (req, res) => {
       }
     }
 
+    console.log("req.body",req.body)
+
+    console.log("req.body.location.postalCode",req.body?.location?.postalCode)
+
+    const postalCodeObj = await PostalCode.findOne(req.body.location.postalcode);
+
+    console.log("postalCodeObj",postalCodeObj)
+
+    if (!postalCodeObj) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Something went wrong" });
+    }
+
+    // 🏷️ Handle location if present
+    if (req.body.location) {
+      console.log("req.body.loaction", req.body.location);
+      console.log("postalCodeObj.code",postalCodeObj.code)
+      const { city, district, postalCode } = req.body.location;
+
+      const coords = await geocodeAddress(city, district, postalCodeObj.code);
+      console.log("cards", coords);
+      req.body.postalCode = postalCode;
+      req.body.location = coords
+        ? { type: "Point", coordinates: [coords.lon, coords.lat] }
+        : undefined;
+
+      // Remove the original location object from body
+      delete req.body.location;
+    }
+
     // 🧩 Allow only specific fields
     const allowedFields = [
       "subSpecialty",
@@ -488,7 +528,8 @@ const updateRequest = async (req, res) => {
       "preferredTime",
       "requirements",
       "attachments",
-      "PostalCode",
+      "postalCode",
+      "location",
     ];
 
     const updateData = {};

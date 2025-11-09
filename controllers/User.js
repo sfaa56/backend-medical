@@ -426,7 +426,7 @@ const getAllProviders = async (req, res) => {
         isAvailable: 1,
         about: 1,
         availability: 1,
-        location:1,
+        location: 1,
         specialties: {
           $map: {
             input: "$specialties",
@@ -799,6 +799,32 @@ const updateUser = async (req, res) => {
       }
     }
 
+    const postalCodeObj = await PostalCode.findOne(
+      req.body.location.postalcode
+    );
+
+    if (!postalCodeObj) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Something went wrong" });
+    }
+
+    if (req.body.location) {
+      console.log("req.body.loaction", req.body.location);
+      console.log("postalCodeObj.code", postalCodeObj.code);
+      const { city, district, postalCode } = req.body.location;
+
+      const coords = await geocodeAddress(city, district, postalCodeObj.code);
+      console.log("cards", coords);
+      req.body.postalCode = postalCode;
+      req.body.location = coords
+        ? { type: "Point", coordinates: [coords.lon, coords.lat] }
+        : undefined;
+
+      // Remove the original location object from body
+      delete req.body.location;
+    }
+
     // ✅ Merge updates
     Object.assign(userToUpdate, req.body);
 
@@ -926,6 +952,8 @@ const toggleAvailability = async (req, res) => {
 
 const ServiceBookingRequest = require("../models/BookingRequest");
 const { success } = require("zod");
+const PostalCode = require("../models/PostalCode");
+const { geocodeAddress } = require("../utils/geocode");
 
 // ✅ KPI summary for provider dashboard
 const getProviderKPI = async (req, res) => {

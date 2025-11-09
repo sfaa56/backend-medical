@@ -7,6 +7,7 @@ const Clinc = require("../models/Clinc");
 const { OAuth2Client } = require("google-auth-library");
 const { sendNotification } = require("../utils/notify");
 const { geocodeAddress } = require("../utils/geocode");
+const PostalCode = require("../models/PostalCode");
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // Step 1: Personal Info
@@ -30,18 +31,16 @@ const personalSchema = Joi.object({
   }).required(),
 
   postalCode: Joi.string().min(1).optional(),
-  
-    location: Joi.object({
+
+  location: Joi.object({
     city: Joi.string(),
     district: Joi.string(),
     postalCode: Joi.string(),
   }),
-
 });
 
 // Step 2–4: Extra info for providers
 const providerSchema = personalSchema.keys({
-
   isVerified: Joi.boolean().default(false),
 
   specialty: Joi.string().required(),
@@ -164,16 +163,22 @@ const registerUser = async (req, res) => {
 
     const { city, district, postalCode } = req.body.location;
 
-    const coords = await geocodeAddress(city, district, postalCode);
+    const postalCodeObj = await PostalCode.findOne(req.body.postalcode);
 
-   delete req.body.location;
+    if (!postalCodeObj) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Something went wrong" });
+    }
 
-   
+    const coords = await geocodeAddress(city, district, postalCodeObj.code);
+
+    delete req.body.location;
 
     // ✅ Create user
     const user = new User({
       ...req.body,
-      postalCode:postalCode,
+      postalCode: postalCode,
       location: coords
         ? { type: "Point", coordinates: [coords.lon, coords.lat] }
         : undefined,
