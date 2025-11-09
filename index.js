@@ -14,7 +14,7 @@ const { initSocket,getSocket } = require("./config/socket");
 connectDb();
 
 app.use(cors({
-  origin:[process.env.front_url,"http://localhost:3001"], // frontend
+  origin:[process.env.front_url,process.env.dashboard,"http://localhost:3001"], // frontend
   credentials: true,
 }));
 
