@@ -884,6 +884,10 @@ const deleteUser = async (req, res) => {
       await cloudinary.uploader.destroy(user.image.publicId);
     }
 
+    if(user.role==="client"){
+      await ServiceRequest.deleteMany({clientId:user._id});
+    }
+
     // Delete provider services and their images
     const services = await ProviderService.find({ providerId: userId });
     for (const service of services) {
