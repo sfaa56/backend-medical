@@ -45,7 +45,6 @@ const createRequestSchema = Joi.object({
   currency: Joi.string().valid("USD", "EGP", "EUR"),
 
   postalCode: Joi.string().optional,
-
       location: Joi.object({
       city: Joi.string(),
       district: Joi.string(),

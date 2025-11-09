@@ -49,6 +49,7 @@ const serviceRequestSchema = new mongoose.Schema(
 
     attachments: [
       {
+         _id: false,
         name: { type: String },
         publicId: { type: String },
         url: { type: String },
