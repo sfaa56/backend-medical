@@ -44,6 +44,8 @@ const createRequestSchema = Joi.object({
   priceType: Joi.string().valid("Hourly", "Session", "Visit").required(),
   currency: Joi.string().valid("USD", "EGP", "EUR"),
 
+  postalCode: Joi.string().optional,
+
       location: Joi.object({
       city: Joi.string(),
       district: Joi.string(),
@@ -67,6 +69,8 @@ const updateRequestSchema = Joi.object({
       Joi.object({
         publicId: Joi.string().required(),
         url: Joi.string().required(),
+                name:Joi.string().optional(),
+        _id:Joi.string().optional()
       }).optional()
     )
     .optional(),
