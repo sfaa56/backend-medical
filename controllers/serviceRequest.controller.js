@@ -24,6 +24,8 @@ const createRequestSchema = Joi.object({
       Joi.object({
         publicId: Joi.string().required(),
         url: Joi.string().required(),
+        name:Joi.string().optional(),
+        _id:Joi.string().optional()
       }).optional()
     )
     .optional(),
