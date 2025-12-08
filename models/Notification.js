@@ -29,7 +29,9 @@ const notificationSchema = new mongoose.Schema(
 
         "provider_registeration",
 
-        "complaint"
+        "complaint",
+
+        "message"
 
 
       ],

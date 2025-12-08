@@ -58,7 +58,7 @@ exports.createOffer = async (req, res) => {
       senderId: providerId,
       type: "offer_received",
       message: `You received a new offer for your service request`,
-      relatedId: savedOffer._id,
+      relatedId: serviceRequest._id,
       io: req.io
     });
 
@@ -147,7 +147,7 @@ exports.acceptOffer = async (req, res) => {
       senderId: req.user.id,
       type: "offer_accepted",
       message: `Your offer has been accepted! An appointment has been scheduled.`,
-      relatedId: offer._id,
+      relatedId: offer.serviceRequestId._id,
       io: req.io
     });
 

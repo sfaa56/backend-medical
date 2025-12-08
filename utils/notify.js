@@ -1,9 +1,8 @@
 const Notification = require("../models/Notification");
-const { getSocket } = require("../config/socket");
 
 /**
- * sendNotification({ recipientId, senderId, type, message, relatedId, data, io })
- * - io optional (Socket.IO server instance) — if provided, emits real-time event
+ * sendNotification({ recipientId, senderId, type, message, relatedId, data })
+ * - Emits real-time event if socket server is initialized.
  */
 exports.sendNotification = async ({
   recipientId,
@@ -14,7 +13,7 @@ exports.sendNotification = async ({
   data = null,
 }) => {
   try {
-    // 1️⃣ create
+    // 1) create notification record
     let notif = await Notification.create({
       recipientId,
       senderId,
@@ -24,15 +23,25 @@ exports.sendNotification = async ({
       data,
     });
 
-    // 2️⃣ populate sender
+    // 2) populate sender
     notif = await notif.populate({
       path: "senderId",
       select: "firstName role image",
     });
 
-    // 3️⃣ emit via socket
-    const io = getSocket();
-    io.to(recipientId.toString()).emit("notification:new", notif);
+    // 3) emit via socket if available (lazy require to avoid circular import)
+    try {
+      // require lazily to avoid circular dependency problems
+      const socketModule = require("../config/socket");
+      if (socketModule && typeof socketModule.getSocket === "function") {
+        const io = socketModule.getSocket();
+        // safe recipientId -> string
+        if (recipientId) io.to(String(recipientId)).emit("notification:new", notif);
+      }
+    } catch (emitErr) {
+      // don't fail the whole operation if socket isn't ready or module cycles exist
+      console.warn("notify: socket emit skipped:", emitErr.message);
+    }
 
     return notif;
   } catch (err) {

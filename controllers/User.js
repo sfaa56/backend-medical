@@ -8,6 +8,7 @@ const Clinc = require("../models/Clinc");
 const { default: mongoose } = require("mongoose");
 const ProviderService = require("../models/ProviderService");
 const Appointment = require("../models/Appointment");
+const jwt = require("jsonwebtoken");
 
 const userValidationSchema = joi.object({
   _id: joi.string().optional(),
@@ -214,8 +215,23 @@ const parseIds = (val) => {
 
 const getAllProviders = async (req, res) => {
   try {
+    
+    const userLat = parseFloat(req.query.lat);
+    const userLng = parseFloat(req.query.lng);
+
     // Initialize pipeline
     const pipeline = [];
+
+        //  GEO NEAR — MUST BE FIRST STAGE
+    if (!isNaN(userLat) && !isNaN(userLng)) {
+      pipeline.push({
+        $geoNear: {
+          near: { type: "Point", coordinates: [userLng, userLat] },
+          distanceField: "distanceInMeters",
+          spherical: true,
+        }
+      });
+    }
 
     // Base match for providers only
     pipeline.push({ $match: { role: "provider" } });
@@ -393,25 +409,48 @@ const getAllProviders = async (req, res) => {
       });
     }
 
-    pipeline.push({
-      $group: {
-        _id: "$_id",
-        doc: { $first: "$$ROOT" },
-        providerServices: { $addToSet: "$providerServices" }, // combine services back
-      },
-    });
 
-    pipeline.push({
-      $replaceRoot: {
-        newRoot: {
-          $mergeObjects: ["$doc", { providerServices: "$providerServices" }],
-        },
-      },
-    });
+    // ✅ GROUP to deduplicate providers (keep unwind-generated duplicates from services)
+pipeline.push({
+  $group: {
+    _id: "$_id",
+    
+    createdAt: { $first: "$createdAt" },
+
+    firstName: { $first: "$firstName" },
+    lastName: { $first: "$lastName" },
+    email: { $first: "$email" },
+    phone: { $first: "$phone" },
+    image: { $first: "$image" },
+    gender: { $first: "$gender" },
+    role: { $first: "$role" },
+    experienceYears: { $first: "$experienceYears" },
+    averageRating: { $first: "$averageRating" },
+    totalReviews: { $first: "$totalReviews" },
+    isAvailable: { $first: "$isAvailable" },
+    about: { $first: "$about" },
+    availability: { $first: "$availability" },
+    distanceInMeters: { $first: "$distanceInMeters" },
+    specialties: { $first: "$specialties" },
+    subspecialties: { $first: "$subspecialties" },
+    qualifications: { $first: "$qualifications" },
+    postalCode: { $first: "$postalCode" },
+    district: { $first: "$district" },
+    city: { $first: "$city" },
+    providerServices: { $push: "$providerServices" }, // collect services into array
+  },
+});
+
+
+
 
     // Project final shape
     pipeline.push({
       $project: {
+
+
+ createdAt: 1, 
+
         _id: 1,
         firstName: 1,
         lastName: 1,
@@ -427,6 +466,18 @@ const getAllProviders = async (req, res) => {
         about: 1,
         availability: 1,
         location: 1,
+        
+        distanceInMeters: 1,
+
+                // NEW FIELD: distance in KM
+        distanceInKm: {
+          $cond: [
+            { $ifNull: ["$distanceInMeters", false] },
+            { $round: [{ $divide: ["$distanceInMeters", 1000] }, 2] },
+            null,
+          ],
+        },
+
         specialties: {
           $map: {
             input: "$specialties",
@@ -448,15 +499,23 @@ const getAllProviders = async (req, res) => {
             },
           },
         },
-        providerServices: {
-          place: "$providerServices.place",
-          serviceCategory: {
-            $arrayElemAt: ["$providerServices.serviceCategory", 0],
-          },
-          subServiceCategory: {
-            $arrayElemAt: ["$providerServices.subServiceCategory", 0],
-          },
-        },
+providerServices: {
+  $map: {
+    input: {
+      $filter: {
+        input: "$providerServices",
+        as: "svc",
+        cond: { $ne: ["$$svc", {}] },
+      },
+    },
+    as: "svc",
+    in: {
+      place: "$$svc.place",
+      serviceCategory: { $arrayElemAt: ["$$svc.serviceCategory", 0] },
+      subServiceCategory: { $arrayElemAt: ["$$svc.subServiceCategory", 0] },
+    },
+  },
+},
         qualifications: {
           $map: {
             input: "$qualifications",
@@ -484,14 +543,20 @@ const getAllProviders = async (req, res) => {
       },
     });
 
+   
+
     // Sorting
     const sortOptions = {
       rating: { averageRating: -1 },
       experience: { experienceYears: -1 },
       newest: { createdAt: -1 },
+      nearest:{distanceInMeters:1}
     };
     const sort = sortOptions[req.query.sort] || { createdAt: -1 };
     pipeline.push({ $sort: sort });
+    
+
+
 
     // Pagination
     const page = Math.max(1, parseInt(req.query.page || "1", 10));
@@ -1003,6 +1068,11 @@ const getProviderKPI = async (req, res) => {
     });
   }
 };
+
+
+
+
+
 
 module.exports = {
   getAllUsers,

@@ -343,6 +343,9 @@ const getAllRequests = async (req, res) => {
       });
     }
 
+
+    
+
     // ---------------------- Sorting ----------------------
     let sortField = req.query.sortBy || "createdAt";
     let sortOrder = req.query.order === "asc" ? 1 : -1;
@@ -359,10 +362,15 @@ const getAllRequests = async (req, res) => {
       sortOrder = -1;
     }
 
+    // ✅ APPLY SORT FIRST (before pagination)
+pipeline.push({ $sort: { [sortField]: sortOrder } });
+
     // ---------------------- Pagination ----------------------
     const page = Math.max(1, parseInt(req.query.page || "1", 10));
     const limit = Math.max(1, parseInt(req.query.limit || "10", 10));
     const skip = (page - 1) * limit;
+
+    pipeline.push({ $skip: skip }, { $limit: limit });
 
     // ---------------------- Count Total (before pagination) ----------------------
     const countPipeline = pipeline.filter(
@@ -374,11 +382,7 @@ const getAllRequests = async (req, res) => {
     const totalRequests = countResult[0]?.total || 0;
 
     // ---------------------- Apply Sorting & Pagination ----------------------
-    pipeline.push(
-      { $sort: { [sortField]: sortOrder } },
-      { $skip: skip },
-      { $limit: limit }
-    );
+
 
     // ---------------------- Execute Main Query ----------------------
     const requests = await ServiceRequest.aggregate(pipeline);

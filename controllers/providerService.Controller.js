@@ -104,11 +104,9 @@ exports.deleteProviderService = async (req, res) => {
     });
 
     if (booking) {
-      res
-        .status(400)
-        .json({
-          error: "you have to complete your appointment first for this service",
-        });
+      res.status(400).json({
+        error: "you have to complete your appointment first for this service",
+      });
     }
 
     // 3️⃣ Delete the service document
@@ -152,6 +150,9 @@ exports.getAllServices = async (req, res) => {
   try {
     const matchTop = {};
 
+    const userLat = parseFloat(req.query.lat);
+    const userLng = parseFloat(req.query.lng);
+
     // ---------------------- Sorting ----------------------
     let sortField = req.query.sortBy || "createdAt";
     let sortOrder = req.query.order === "asc" ? 1 : -1;
@@ -166,6 +167,9 @@ exports.getAllServices = async (req, res) => {
     } else if (req.query.sort === "rating-desc") {
       sortField = "provider.averageRating";
       sortOrder = -1;
+    } else if (req.query.sort === "nearest"){
+      sortField = "distanceInKm";
+      sortOrder = 1;
     }
 
     // ---------------------- Price Filter ----------------------
@@ -218,6 +222,18 @@ exports.getAllServices = async (req, res) => {
 
     // ---------------------- Pipeline ----------------------
     const pipeline = [];
+
+    //  GEO NEAR — MUST BE FIRST STAGE
+    if (!isNaN(userLat) && !isNaN(userLng)) {
+      pipeline.push({
+        $geoNear: {
+          near: { type: "Point", coordinates: [userLng, userLat] },
+          distanceField: "distanceInMeters",
+          spherical: true,
+        },
+      });
+    }
+
     if (Object.keys(matchTop).length) pipeline.push({ $match: matchTop });
 
     // Lookup for subServiceCategory -> serviceCategory
@@ -322,7 +338,7 @@ exports.getAllServices = async (req, res) => {
                 email: 1,
                 image: 1,
                 specialty: 1,
-                location:1,
+                location: 1,
                 subspecialty: "$firstSubspecialty",
                 postalCode: { _id: 1, code: 1 },
                 district: { _id: 1, name: 1 },
@@ -427,6 +443,13 @@ exports.getAllServices = async (req, res) => {
         specialty: 1,
         provider: 1,
         bookings: 1,
+        distanceInKm: {
+          $cond: [
+            { $ifNull: ["$distanceInMeters", false] },
+            { $round: [{ $divide: ["$distanceInMeters", 1000] }, 2] },
+            null,
+          ],
+        },
       },
     });
 

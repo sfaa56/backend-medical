@@ -9,6 +9,7 @@ const { sendNotification } = require("../utils/notify");
 const { geocodeAddress } = require("../utils/geocode");
 const PostalCode = require("../models/PostalCode");
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const { sendEmail, resetPasswordEmailHtml } = require("../utils/email");
 
 // Step 1: Personal Info
 const personalSchema = Joi.object({
@@ -439,6 +440,101 @@ const googleLogin = async (req, res) => {
   }
 };
 
+const signToken = (userId) => {
+  return jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || "7d" });
+};
+
+
+const createSendToken = (user, statusCode, res) => {
+  const token = signToken(user._id);
+  // remove password field
+  user.password = undefined;
+  res.status(statusCode).json({ status: "success", token, data: { user } });
+};
+
+
+const forgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: "Please provide your email." });
+
+    const user = await User.findOne({ email });
+    // Always respond with generic message to avoid email enumeration
+    if (!user) {
+      return res.status(200).json({ message: "If an account with that email exists, you will receive a reset link." });
+    }
+
+    const resetToken = user.createPasswordResetToken();
+    await user.save({ validateBeforeSave: false });
+
+    const resetURL = `${process.env.front_url}/Auth/reset-password/${resetToken}`;
+
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: "Your password reset link (valid for 10 minutes)",
+        html: resetPasswordEmailHtml({ name: user.firstName || user.email, resetUrl: resetURL, expiryMinutes: 10 }),
+        text: `Reset your password using this URL (valid 10 minutes): ${resetURL}`
+      });
+
+      res.status(200).json({ message: "If an account with that email exists, you will receive a reset link." });
+    } catch (err) {
+      // rollback token fields on email failure
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpire = undefined;
+      await user.save({ validateBeforeSave: false });
+      console.error("Error sending reset email:", err);
+      return res.status(500).json({ message: "Error sending reset email. Try again later." });
+    }
+  } catch (err) {
+    console.error(" error:", err);
+
+    res.status(500).json({ message: "Server error. Please try again later." });
+  }
+};
+
+
+const resetPassword = async (req, res, next) => {
+  try {
+    const rawToken = req.params.token;
+    if (!rawToken) return res.status(400).json({ message: "Token is required." });
+
+    const hashed = crypto.createHash("sha256").update(rawToken).digest("hex");
+
+    const user = await User.findOne({
+      resetPasswordToken: hashed,
+      resetPasswordExpire: { $gt: Date.now() }
+    }).select("+password");
+
+    if (!user) return res.status(400).json({ message: "Token is invalid or has expired." });
+
+    const { password, passwordConfirm } = req.body;
+    if (!password || !passwordConfirm) return res.status(400).json({ message: "Please provide and confirm your new password." });
+    if (password !== passwordConfirm) return res.status(400).json({ message: "Passwords do not match." });
+
+     const hashedPassword = await bcrypt.hash(password, 10);
+
+    user.password = hashedPassword;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+
+
+
+    await user.save(); 
+
+    return res.status(200).json({ message: "Password has been reset successfully." });
+
+  } catch (err) {
+    console.error("Reset password error:", err);
+    res.status(500).json({ message: "Server error. Please try again later." });
+  }
+};
+
+
+
+
+
+
 module.exports = {
   registerUser,
   loginUser,
@@ -446,4 +542,6 @@ module.exports = {
   ChangePassword,
   refreshAccessToken,
   googleLogin,
+  forgotPassword,
+  resetPassword
 };

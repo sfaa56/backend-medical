@@ -1,5 +1,7 @@
 // models/User.js
 const mongoose = require("mongoose");
+const bcrypt = require("bcrypt");
+const crypto = require("crypto");
 
 const userSchema = new mongoose.Schema(
   {
@@ -111,10 +113,29 @@ const userSchema = new mongoose.Schema(
         default: [0, 0],
       },
     },
+
+  // password reset fields
+  resetPasswordToken: { type: String },
+  resetPasswordExpire: { type: Date },
+  // used to invalidate tokens issued before password change
+  passwordChangedAt: { type: Date }
+
   },
   { timestamps: true }
 );
 
 userSchema.index({ location: "2dsphere" });
+
+
+
+// Instance method: create reset token (returns raw token)
+userSchema.methods.createPasswordResetToken = function () {
+  const resetToken = crypto.randomBytes(32).toString("hex");
+  // store hashed token
+  this.resetPasswordToken = crypto.createHash("sha256").update(resetToken).digest("hex");
+  this.resetPasswordExpire = Date.now() + (10 * 60 * 1000); // 10 minutes
+  return resetToken;
+};
+
 
 module.exports = mongoose.model("User", userSchema);

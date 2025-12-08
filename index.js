@@ -22,6 +22,18 @@ app.use(cookieParser());
 app.use(express.json());
 
 
+// basic rate limiter middleware
+const rateLimit = require("express-rate-limit");
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: "Too many requests from this IP, please try again later."
+});
+app.use(limiter);
+
+
+
+
 const server = http.createServer(app);
 initSocket(server);
 
@@ -30,6 +42,9 @@ app.use((req, res, next) => {
   req.io = getSocket();
   next();
 });
+
+
+
 
 
 app.use("/api/auth", require("./routes/auth"));
@@ -51,6 +66,8 @@ app.use("/api/admin",require("./routes/admin.routes"));
 app.use("/api/notification", require("./routes/notification.routes"));
 app.use("/api/reviews", require("./routes/review.routes"));
 app.use("/api/complaints", require("./routes/complain.route"));
+app.use("/api/conversations", require("./routes/conversation.routes"));
+app.use("/api/messages", require("./routes/message.routes"));
 
 
 app.use("/", (req, res) => {
